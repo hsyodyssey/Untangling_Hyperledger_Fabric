@@ -1,2 +1,2 @@
 # Untangling_Hyperledger
-Untangling_Tendermint
+Untangling_Hyperledger
