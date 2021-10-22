@@ -43,7 +43,21 @@ func NewHeight(blockNum, txNum uint64) *Height {
 
 在Hyperledger 中Endearment node会并发的模拟执行Transaction。这种方式可以增加系统的Throughput，但是潜在的会带来读写冲突的问题。Hyperledger Fabric 基于MVCC的思想来解决这个问题。
 
-Hyperledger Fabric是一种EOV结构的Blockchain。在validation阶段，Validator通过判断Transaction的Read-Write Set来判断Transaction是否invalid。具体的是，Validator会读取Transaction的Read Set中所有的Key以及其的Version，并与该Key在当前World StateDB中的Version进行对比。如果两者不相同，说明出现了读写冲突，该Transaction会被标记为Invalid，其Write set的结果最终不会被写入到World StateDB中。
+Hyperledger Fabric是一种EOV结构的Blockchain。在validation阶段，Validator通过判断Transaction的Read-Write Set来判断Transaction是否invalid。
+
+具体的是，Validator会循环遍历Transaction的Read Set中所有的Key以及其的Version，并与该Key在当前World StateDB中的Version进行对比。如果两者不相同，说明出现了读写冲突，该Transaction会被标记为Invalid，其Write set的结果最终不会被写入到World StateDB中。
+
+```Golang
+// 循环遍历kvrwse数组中所有的kvRead
+func (v *validator) validateReadSet(ns string, kvReads []*kvrwset.KVRead, updates *privacyenabledstate.PubUpdateBatch) (bool, error) {
+ for _, kvRead := range kvReads {
+  if valid, err := v.validateKVRead(ns, kvRead, updates); !valid || err != nil {
+   return valid, err
+  }
+ }
+ return true, nil
+}
+```
 
 Validator的代码位于，"fabric/core/ledger/kvledger/txmgmt/validation/validator.go"中。
 
