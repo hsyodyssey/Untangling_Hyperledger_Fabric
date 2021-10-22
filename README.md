@@ -23,3 +23,18 @@ type Version struct {
 ```
 
 Hyperledger Fabric中关于Key的Version由两部分组成，BlockNum以及txNum。BlockNum表示transaction被打包进的区块的高度，txNum用于表示交易在区块中的位置(从0号位置开始统计)。
+
+与WorldState相关的代码中，version被定义在“fabric/core/ledger/internal/version/version.go”文件的Height结构体中。
+
+```Golang
+// Height represents the height of a transaction in blockchain
+type Height struct {
+ BlockNum uint64
+ TxNum    uint64
+}
+
+// NewHeight constructs a new instance of Height
+func NewHeight(blockNum, txNum uint64) *Height {
+ return &Height{blockNum, txNum}
+}
+```
