@@ -1,6 +1,6 @@
 # Untangling_Hyperledger_Fabric
 
-The ordering service will order transactions in a arbitrarily way or just by the transaction arrive time.
+In this repo, we investigate some essential details that are easily overlooked in Hyperledger Fabric (v2.3).
 
 ## Core Component in Hyperledger Fabric
 
@@ -88,3 +88,11 @@ func (v *validator) validateKVRead(ns string, kvRead *kvrwset.KVRead, updates *p
  return true, nil
 }
 ```
+
+### Transaction Endorsement
+
+在Hyperledger Fabric中，endorsement policy是在Chaincode的初始化的时候定义的。默认值设置为需要当前Channel中多数的Organization的同意。
+
+在以太坊中，系统通过计算1.Gas Limit 2.EVM调用栈的深度来解决停机问题。
+
+在Hyperledger Fabric中，Endorseme·nt Peers是网络中唯一执行合约的节点。为了解决chaincode中的停机问题，Peer通过设置CORE_EXECUTECHAINCODE_TIMEOUT 来设置transaction可以执行的时间上限。一旦超过了这个上线，transaction 将会因为Execute timeout而失败。～～～·
