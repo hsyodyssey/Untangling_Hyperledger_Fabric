@@ -95,4 +95,37 @@ func (v *validator) validateKVRead(ns string, kvRead *kvrwset.KVRead, updates *p
 
 在以太坊中，系统通过计算1.Gas Limit 2.EVM调用栈的深度来解决停机问题。
 
-在Hyperledger Fabric中，Endorseme·nt Peers是网络中唯一执行合约的节点。为了解决chaincode中的停机问题，Peer通过设置CORE_EXECUTECHAINCODE_TIMEOUT 来设置transaction可以执行的时间上限。一旦超过了这个上线，transaction 将会因为Execute timeout而失败。～～～·
+在Hyperledger Fabric中，Endorsement Peers是网络中唯一执行合约的节点。为了解决chaincode中的停机问题，Peer通过设置CORE_EXECUTECHAINCODE_TIMEOUT 来设置transaction可以执行的时间上限。一旦超过了这个上线，transaction 将会因为Execute timeout而失败。
+
+```Golang
+const (
+ defaultExecutionTimeout = 30 * time.Second
+ minimumStartupTimeout   = 5 * time.Second
+)
+
+type Config struct {
+ TotalQueryLimit int
+ TLSEnabled      bool
+ Keepalive       time.Duration
+ ExecuteTimeout  time.Duration
+ InstallTimeout  time.Duration
+ StartupTimeout  time.Duration
+ LogFormat       string
+ LogLevel        string
+ ShimLogLevel    string
+ SCCAllowlist    map[string]bool
+}
+```
+
+### Smart Contract and Chaincode
+
+按照Hyperledger 官方文档的解释，一个或多个多个Smart Contract构成了一个Chaincode。Hyperledger中的Smart Contract使用基于通用编程语言开发，包括Go，Java和JavaScript。使用通用编程器语言增加了合约开发的灵活度，也带来了更多的不确定性。
+为了约束合约的开发，减少合约代码中的不确定性，开发人员在编写Smart Contract时需要继承官方Fabric SDK中的接口函数，合约函数需要调用Fabric SDK官方提供SDK才能与链上数据进行交互。具体的可以阅读官方文档中Transaction Context一章。
+
+For Example, Fabric SDK中关于World State的API:
+
+- <async> getState(key) [Retrieves the current value of the state variable key]
+- <async> putState(key, value) [Writes the state variable key of value value to the state store. If the variable already exists, the value will be overwritten.
+- <async> deleteState(key)
+- <async> getStateByRange(startKey, endKey) [Returns a range iterator over a set of keys in the ledger. The iterator can be used to iterate over all keys between the startKey (inclusive) and endKey (exclusive). The query is re-executed during validation phase to ensure result set has not changed since transaction endorsement (phantom reads detected).]
+- getStateByRangeWithPagination(startKey, endKey, pageSize, bookmark)
