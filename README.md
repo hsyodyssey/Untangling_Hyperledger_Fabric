@@ -129,3 +129,15 @@ For Example, Fabric SDK中关于World State的API:
 - <async> deleteState(key)
 - <async> getStateByRange(startKey, endKey) [Returns a range iterator over a set of keys in the ledger. The iterator can be used to iterate over all keys between the startKey (inclusive) and endKey (exclusive). The query is re-executed during validation phase to ensure result set has not changed since transaction endorsement (phantom reads detected).]
 - getStateByRangeWithPagination(startKey, endKey, pageSize, bookmark)
+
+### Compared with Ethereum
+
+首先关于链上数据管理上，Hyperledger Fabric与Ethereum两者的账本都是以K/V-based State Object作为基本数据元素，通过World State来维护管理State Object的最新状态。具体的来说，World State本质上是一个K/V-based State Database(StateDB)。
+
+在State database的具体实现上，Hyperledger Fabric与Ethereum采用的模型有较大的不同。
+
+首先Ethereum使用ADS-based index数据结构对State Objects进行管理。并在LevelDB的基础上封装了一层StateDB层提供向上的接口。上层应用逻辑都需要通过StateDB提供的接口来间接访问底层的LevelDB结构。在Ethereum对World State中所有的State Object的Key值都是依赖于加密算法的随机生成。及时是State Object的拥有者也无法在其Key值生成前获取到其Key值的信息。同样的因为Key值的生成依赖于安全的哈希算法，所以在点查询/随即查询State Object时速度较快。而在Range Query表现较差。
+
+另一方面在Hyperledger Fabric提供了SDK对CouchDB/LevelDB提供的K/V相关的API进行封装，向上层逻辑提供Put/Get/Delete State Database的操作。
+
+不同的是在Hyperledger Fabric中所有的World State中的基础数据元素(State Object)的key是可以由开发人员/用户自行提供的。用户或者开发人员可以提供任意的String类型的Key作为World State中State Object的Key值，用于检索。这个特征可以使得Hyperledger Fabric很轻易的提供基于Key值的Range Query，例如上面Section提到的getStateByRange(startKey, endKey)。
