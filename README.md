@@ -6,9 +6,10 @@ In this repo, we investigate some essential details that are easily overlooked i
 
 ### Read-Write Set
 
+
 在"fabric/vendor/github.com/hyperledger/fabric-protos-go/ledger/rwset/kvrwset/kv_rwset.pb.go" 文件中，我们可以找到关于Read/Write set 以及Read Set中关于Version的定义。
 
-```Golang
+```go
 // Version encapsulates the version of a Key
 // A version of a committed key is maintained as the height of the transaction that committed the key.
 // The height is represenetd as a tuple <blockNum, txNum> where the txNum is the position of the transaction
@@ -24,9 +25,9 @@ type Version struct {
 
 Hyperledger Fabric中关于Key的Version由两部分组成，BlockNum以及txNum。BlockNum表示transaction被打包进的区块的高度，txNum用于表示交易在区块中的位置(从0号位置开始统计)。
 
-与WorldState相关的代码中，version被定义在“fabric/core/ledger/internal/version/version.go”文件的Height结构体中。
+与World State相关的代码中，version被定义在“fabric/core/ledger/internal/version/version.go”文件的Height结构体中。
 
-```Golang
+```go
 // Height represents the height of a transaction in blockchain
 type Height struct {
  BlockNum uint64
@@ -41,7 +42,7 @@ func NewHeight(blockNum, txNum uint64) *Height {
 
 ### Transaction Validation
 
-在Hyperledger 中Endearment node会并发的模拟执行Transaction。这种方式可以增加系统的Throughput，但是潜在的会带来读写冲突的问题。Hyperledger Fabric 基于MVCC的思想来解决这个问题。
+在Hyperledger Fabric中Endearment node会并发的模拟执行Transaction。这种并发的方式可以增加系统的Throughput，但是会带来潜在的读写冲突的问题。在Hyperledger Fabric 通过使用基于MVCC的技术来解决Transaction之间的读写冲突问题。
 
 Hyperledger Fabric是一种EOV结构的Blockchain。在validation阶段，Validator通过判断Transaction的Read-Write Set来判断Transaction是否invalid。
 
@@ -136,8 +137,99 @@ For Example, Fabric SDK中关于World State的API:
 
 在State database的具体实现上，Hyperledger Fabric与Ethereum采用的模型有较大的不同。
 
-首先Ethereum使用ADS-based index数据结构对State Objects进行管理。并在LevelDB的基础上封装了一层StateDB层提供向上的接口。上层应用逻辑都需要通过StateDB提供的接口来间接访问底层的LevelDB结构。在Ethereum对World State中所有的State Object的Key值都是依赖于加密算法的随机生成。及时是State Object的拥有者也无法在其Key值生成前获取到其Key值的信息。同样的因为Key值的生成依赖于安全的哈希算法，所以在点查询/随即查询State Object时速度较快。而在Range Query表现较差。
+首先Ethereum使用ADS-based index数据结构对State Objects进行管理。并在LevelDB的基础上封装了一层StateDB层提供向上的接口。上层应用逻辑都需要通过StateDB提供的接口来间接访问底层的LevelDB结构。通常有两种需要查询修改World State的情况，1. Ethereum链上的合约逻辑需要 2.外部开发人员/用户需要。这两种情况调用函数是相同的，本质上都是StateDB提供的接口函数。StateDB不仅提供了State Object管理需要的逻辑代码，还包括了一些应用层面的逻辑，比如CreateAccount。
 
-另一方面在Hyperledger Fabric提供了SDK对CouchDB/LevelDB提供的K/V相关的API进行封装，向上层逻辑提供Put/Get/Delete State Database的操作。
+此外，在Ethereum中，World State包含的所有的State Object的Key值都是通过加密算法随机生成的。即使是State Object的拥有者也无法在其Key值生成前(生成Key值的函数调用之前)，获取到其Key值的信息。因为Key值的生成依赖于安全的哈希算法，所以在点查询(Point Query)/随机查询State Object时速度较快。同样因为函数的随机性，而在Range Query上表现相对较差。
 
-不同的是在Hyperledger Fabric中所有的World State中的基础数据元素(State Object)的key是可以由开发人员/用户自行提供的。用户或者开发人员可以提供任意的String类型的Key作为World State中State Object的Key值，用于检索。这个特征可以使得Hyperledger Fabric很轻易的提供基于Key值的Range Query，例如上面Section提到的getStateByRange(startKey, endKey)。
+另一方面，在Hyperledger Fabric提供了对CouchDB/LevelDB提供的K/V相关的API进行封装，向上层逻辑提供Put/Get/Delete State Database的操作。从变量的声明中，我们可以看出Hyperledger Fabric设计思想上的不同。Hyperledger Fabric将Blockchain的组件都数据库化。
+
+```Golang
+// kvLedger provides an implementation of `ledger.PeerLedger`.
+// This implementation provides a key-value based data model
+type kvLedger struct {
+ ledgerID               string
+ bootSnapshotMetadata   *SnapshotMetadata
+ blockStore             *blkstorage.BlockStore
+ pvtdataStore           *pvtdatastorage.Store
+ txmgr                  *txmgr.LockBasedTxMgr
+ historyDB              *history.DB
+ configHistoryRetriever *collectionConfigHistoryRetriever
+ snapshotMgr            *snapshotMgr
+ blockAPIsRWLock        *sync.RWMutex
+ stats                  *ledgerStats
+ commitHash             []byte
+ hashProvider           ledger.HashProvider
+ config                 *ledger.Config
+
+ // isPvtDataStoreAheadOfBlockStore is read during missing pvtData
+ // reconciliation and may be updated during a regular block commit.
+ // Hence, we use atomic value to ensure consistent read.
+ isPvtstoreAheadOfBlkstore atomic.Value
+
+ commitNotifierLock sync.Mutex
+ commitNotifier     *commitNotifier
+}
+```
+
+另一方面，Hyperledger Fabric底层数据库上并没有很多业务层面的逻辑。Hyperledger Fabric中所有的World State中的基础数据元素(State Object)的key是可以由开发人员/用户自行提供的。用户或者开发人员可以提供任意的String类型的Key作为World State中State Object的Key值，用于检索。这个特征可以使得Hyperledger Fabric很轻易的提供基于Key值的Range Query，例如上面Section提到的getStateByRange(startKey, endKey)。
+
+## Hyperledger Application Development
+
+### From the Coarse-grained view
+
+Fabric SDK用于提供给开发人员与链上合约交互的API。目前Fabric 官方提供了基于NodeJS以及Java的API文档。其中NodeJS文档相对比较全面。相比于Ethereum的Web3对外提供的API，Fabric SDK中提供的API相对较少。都是一些直接与链上数据进行交互的API。
+
+在SDK中，最重要的Class是Gateway Class，甚至Java版本的SDK文档就叫做Hyperledger Fabric Gateway SDK for Java。下面是官方文档的例子：
+
+```Java
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.concurrent.TimeoutException;
+
+import org.hyperledger.fabric.gateway.Contract;
+import org.hyperledger.fabric.gateway.ContractException;
+import org.hyperledger.fabric.gateway.Gateway;
+import org.hyperledger.fabric.gateway.Network;
+import org.hyperledger.fabric.gateway.Wallet;
+import org.hyperledger.fabric.gateway.Wallets;
+
+class Sample {
+    public static void main(String[] args) throws IOException {
+        // Load an existing wallet holding identities used to access the network.
+        Path walletDirectory = Paths.get("wallet");
+        Wallet wallet = Wallets.newFileSystemWallet(walletDirectory);
+
+        // Path to a common connection profile describing the network.
+        Path networkConfigFile = Paths.get("connection.json");
+
+        // Configure the gateway connection used to access the network.
+        Gateway.Builder builder = Gateway.createBuilder()
+                .identity(wallet, "user1")
+                .networkConfig(networkConfigFile);
+
+        // Create a gateway connection
+        try (Gateway gateway = builder.connect()) {
+
+            // Obtain a smart contract deployed on the network.
+            // 获取Channel
+            Network network = gateway.getNetwork("mychannel");
+            // 获取Channel上安装的合约
+            Contract contract = network.getContract("fabcar");
+
+            // Submit transactions that store state to the ledger.
+            byte[] createCarResult = contract.createTransaction("createCar")
+                    .submit("CAR10", "VW", "Polo", "Grey", "Mary");
+            System.out.println(new String(createCarResult, StandardCharsets.UTF_8));
+
+            // Evaluate transactions that query state from the ledger.
+            byte[] queryAllCarsResult = contract.evaluateTransaction("queryAllCars");
+            System.out.println(new String(queryAllCarsResult, StandardCharsets.UTF_8));
+
+        } catch (ContractException | TimeoutException | InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
