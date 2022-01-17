@@ -6,7 +6,6 @@ In this repo, we investigate some essential details that are easily overlooked i
 
 ### Read-Write Set
 
-
 在"fabric/vendor/github.com/hyperledger/fabric-protos-go/ledger/rwset/kvrwset/kv_rwset.pb.go" 文件中，我们可以找到关于Read/Write set 以及Read Set中关于Version的定义。
 
 ```go
@@ -48,7 +47,7 @@ Hyperledger Fabric是一种EOV结构的Blockchain。在validation阶段，Valida
 
 具体的是，Validator会循环遍历Transaction的Read Set中所有的Key以及其的Version，并与该Key在当前World StateDB中的Version进行对比。如果两者不相同，说明出现了读写冲突，该Transaction会被标记为Invalid，其Write set的结果最终不会被写入到World StateDB中。
 
-```Golang
+```go
 // 循环遍历kvrwse数组中所有的kvRead
 func (v *validator) validateReadSet(ns string, kvReads []*kvrwset.KVRead, updates *privacyenabledstate.PubUpdateBatch) (bool, error) {
  for _, kvRead := range kvReads {
@@ -94,11 +93,11 @@ func (v *validator) validateKVRead(ns string, kvRead *kvrwset.KVRead, updates *p
 
 在Hyperledger Fabric中，endorsement policy是在Chaincode的初始化的时候定义的。默认值设置为需要当前Channel中多数的Organization的同意。
 
-在以太坊中，系统通过计算1.Gas Limit 2.EVM调用栈的深度来解决停机问题。
+在以太坊中，系统通过限制合约调用所需要的Gas Limit，或者通过限制EVM调用栈的深度来解决停机问题。
 
-在Hyperledger Fabric中，Endorsement Peers是网络中唯一执行合约的节点。为了解决chaincode中的停机问题，Peer通过设置CORE_EXECUTECHAINCODE_TIMEOUT 来设置transaction可以执行的时间上限。一旦超过了这个上线，transaction 将会因为Execute timeout而失败。
+在Hyperledger Fabric中，Endorsement Peers是网络中唯一会执行合约的成员节点。与以太坊不同的是，Hyperledger Fabric没有Gas的概念，以及没有过渡层虚拟机来构建调用栈。为了解决chaincode中的停机问题，Peer通过设置CORE_EXECUTECHAINCODE_TIMEOUT来设置transaction可以执行的时间上限。一旦Transaction的运行时间超过了这个上线，则transaction将会因为Execute timeout而失败。
 
-```Golang
+```go
 const (
  defaultExecutionTimeout = 30 * time.Second
  minimumStartupTimeout   = 5 * time.Second
@@ -120,7 +119,7 @@ type Config struct {
 
 ### Smart Contract and Chaincode
 
-按照Hyperledger 官方文档的解释，一个或多个多个Smart Contract构成了一个Chaincode。Hyperledger中的Smart Contract使用基于通用编程语言开发，包括Go，Java和JavaScript。使用通用编程器语言增加了合约开发的灵活度，也带来了更多的不确定性。
+按照Hyperledger 官方文档的解释，一个或多个Smart Contract构成了一个Chaincode。Hyperledger中的Smart Contract使用基于通用编程语言开发，包括Go，Java和JavaScript。使用通用编程器语言增加了合约开发的灵活度，也带来了更多的不确定性。
 为了约束合约的开发，减少合约代码中的不确定性，开发人员在编写Smart Contract时需要继承官方Fabric SDK中的接口函数，合约函数需要调用Fabric SDK官方提供SDK才能与链上数据进行交互。具体的可以阅读官方文档中Transaction Context一章。
 
 For Example, Fabric SDK中关于World State的API:
@@ -137,7 +136,7 @@ For Example, Fabric SDK中关于World State的API:
 
 在State database的具体实现上，Hyperledger Fabric与Ethereum采用的模型有较大的不同。
 
-首先Ethereum使用ADS-based index数据结构对State Objects进行管理。并在LevelDB的基础上封装了一层StateDB层提供向上的接口。上层应用逻辑都需要通过StateDB提供的接口来间接访问底层的LevelDB结构。通常有两种需要查询修改World State的情况，1. Ethereum链上的合约逻辑需要 2.外部开发人员/用户需要。这两种情况调用函数是相同的，本质上都是StateDB提供的接口函数。StateDB不仅提供了State Object管理需要的逻辑代码，还包括了一些应用层面的逻辑，比如CreateAccount。
+首先Ethereum使用MPT对State Objects进行管理。并在LevelDB的基础上封装了一层StateDB层提供向上的接口。上层应用逻辑都需要通过StateDB提供的接口来间接访问底层的LevelDB结构。通常有两种需要查询修改World State的情况，1. Ethereum链上的合约逻辑需要 2.外部开发人员/用户需要。这两种情况调用函数是相同的，本质上都是StateDB提供的接口函数。StateDB不仅提供了State Object管理需要的逻辑代码，还包括了一些应用层面的逻辑，比如CreateAccount。
 
 此外，在Ethereum中，World State包含的所有的State Object的Key值都是通过加密算法随机生成的。即使是State Object的拥有者也无法在其Key值生成前(生成Key值的函数调用之前)，获取到其Key值的信息。因为Key值的生成依赖于安全的哈希算法，所以在点查询(Point Query)/随机查询State Object时速度较快。同样因为函数的随机性，而在Range Query上表现相对较差。
 
